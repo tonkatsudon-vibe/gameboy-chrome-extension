@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Must match the iframe's color-scheme in overlay.js to stay transparent on dark pages. -->
+  <meta name="color-scheme" content="light">
+  <title>Game Boy</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="gameboy" id="gameboy">
+    <img class="skin" id="skin" alt="" draggable="false">
+
+    <div class="screen">
+      <img class="boot" id="boot" alt="" hidden>
+      <canvas id="screen" width="160" height="144" hidden></canvas>
+      <div class="web" id="web" hidden>
+        <form class="urlbar" id="urlbar">
+          <button type="button" id="web-back" title="Back (B)" aria-label="Back" disabled>&lsaquo;</button>
+          <input id="url" type="text" placeholder="Search or type a URL" spellcheck="false" autocomplete="off">
+        </form>
+        <div class="web-page">
+          <!-- No allow-top-navigation: framed sites can't navigate the page hosting the Game Boy. -->
+          <iframe id="page" title="Web page"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <div class="dpad">
+      <button data-key="up" class="up" aria-label="Up"></button>
+      <button data-key="left" class="left" aria-label="Left"></button>
+      <button data-key="right" class="right" aria-label="Right"></button>
+      <button data-key="down" class="down" aria-label="Down"></button>
+    </div>
+    <button data-key="b" class="round b" aria-label="B"></button>
+    <button data-key="a" class="round a" aria-label="A"></button>
+    <button data-key="select" class="pill select" aria-label="Select"></button>
+    <button data-key="start" class="pill start" aria-label="Start"></button>
+
+    <!-- Revealed when hovering the bottom edge of the shell. -->
+    <div class="tray">
+      <div class="toolbar">
+        <div class="skins" id="skins"></div>
+        <button class="boot-mode" id="boot-mode" title="Switch boot animation"></button>
+        <button class="boot-mode" id="mode"></button>
+        <button class="close" id="close" title="Close" aria-label="Close">&times;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sits in the transparent corner the shell's curve leaves free. -->
+  <div class="grip" id="grip" title="Drag to resize"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

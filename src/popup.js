@@ -1,0 +1,344 @@
+// Classic DMG 4-shade palette, lightest to darkest.
+const PALETTE = ['#9bbc0f', '#8bac0f', '#306230', '#0f380f'];
+
+const KEYMAP = {
+  ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+  z: 'b', x: 'a', Enter: 'start', Shift: 'select',
+};
+
+const SKINS = ['gray', 'blue', 'red', 'orange', 'yellow', 'lightgreen', 'pink'];
+
+// soundAt lines the sound up with the animation: the classic "ding" lands as
+// the Nintendo logo stops scrolling (3.42s in the GIF, sound has 0.2s lead-in).
+// length is the GIF's single-loop duration; after it the game screen takes over.
+const BOOTS = {
+  classic: { label: 'Classic', gif: 'gameboy.gif', sound: 'gameboy.mp3', soundAt: 3220, length: 4500 },
+  color: { label: 'Color', gif: 'gameboy-adv.gif', sound: 'gameboy-color.mp3', soundAt: 1350, length: 5300 },
+};
+
+// igu=1 is Google's embeddable variant of its homepage and search.
+const HOME = 'https://www.google.com/webhp?igu=1';
+const searchUrl = (q) => `https://www.google.com/search?igu=1&q=${encodeURIComponent(q)}`;
+
+const skinImg = document.getElementById('skin');
+const bootImg = document.getElementById('boot');
+const bootModeBtn = document.getElementById('boot-mode');
+const canvas = document.getElementById('screen');
+const ctx = canvas.getContext('2d');
+const web = document.getElementById('web');
+const page = document.getElementById('page');
+const urlInput = document.getElementById('url');
+const webBackBtn = document.getElementById('web-back');
+const modeBtn = document.getElementById('mode');
+
+const prefs = { skin: 'gray', boot: 'color', mode: 'game', url: HOME };
+const state = { x: 76, y: 68, lastKey: 'none', booting: false };
+let bootTimers = [];
+let localSound = null;
+
+const asset = (path) => `../assets/${path}`;
+
+// chrome.storage is missing when popup.html is opened directly as a file.
+const storage = globalThis.chrome?.storage?.local;
+const loadPrefs = () => (storage ? storage.get(prefs) : Promise.resolve(prefs));
+const savePrefs = () => storage?.set(prefs);
+
+// The game's position lives for the browser session, so it survives the
+// Game Boy being rebuilt on every page and tab.
+const session = globalThis.chrome?.storage?.session;
+const GAME_KEYS = ['x', 'y', 'lastKey'];
+const loadGame = () => (session ? session.get(GAME_KEYS) : Promise.resolve({}));
+const saveGame = () => session?.set(Object.fromEntries(GAME_KEYS.map((k) => [k, state[k]])));
+
+// overlay.js adds ?resume when rebuilding after a page change or tab switch.
+const RESUME = new URLSearchParams(location.search).has('resume');
+
+function draw() {
+  ctx.fillStyle = PALETTE[0];
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = PALETTE[3];
+  ctx.font = '8px monospace';
+  ctx.fillText('HELLO, GAME BOY', 8, 14);
+  ctx.fillText(`KEY: ${state.lastKey.toUpperCase()}`, 8, 136);
+
+  ctx.fillStyle = PALETTE[2];
+  ctx.fillRect(state.x, state.y, 8, 8);
+}
+
+function press(key) {
+  if (state.booting) return;
+  if (prefs.mode === 'web') {
+    if (key === 'b') webBack();
+    if (key === 'start') urlInput.focus();
+    return;
+  }
+  state.lastKey = key;
+  if (key === 'up') state.y = Math.max(20, state.y - 4);
+  if (key === 'down') state.y = Math.min(120, state.y + 4);
+  if (key === 'left') state.x = Math.max(0, state.x - 4);
+  if (key === 'right') state.x = Math.min(152, state.x + 4);
+  saveGame();
+  draw();
+}
+
+// action: 'prepare' (warm up the player), 'play', or 'stop'.
+// This frame lives inside a web page, where Chrome often blocks sound until the
+// page is clicked, so the background plays it from an offscreen document.
+function bootAudio(action, sound) {
+  if (globalThis.chrome?.runtime?.id) {
+    chrome.runtime.sendMessage({ type: 'gameboy:sound', action, sound }).catch(() => {});
+    return;
+  }
+  // Opened as a plain file (no extension APIs): play it here instead.
+  localSound?.pause();
+  localSound = null;
+  if (action === 'play') {
+    localSound = new Audio(asset(`sounds/${sound}`));
+    localSound.play().catch(() => {});
+  }
+}
+
+function boot() {
+  bootTimers.forEach(clearTimeout);
+  bootAudio('stop');
+
+  const { gif, sound, soundAt, length } = BOOTS[prefs.boot];
+  state.booting = true;
+  canvas.hidden = true;
+  web.hidden = true;
+  bootImg.hidden = false;
+  // Cache-bust so the GIF restarts from frame 0 on every boot.
+  bootImg.src = `${asset(gif)}?t=${Date.now()}`;
+
+  // Create the offscreen player now so it's ready when the sound is due.
+  bootAudio('prepare');
+  bootTimers = [
+    setTimeout(() => bootAudio('play', sound), soundAt),
+    setTimeout(() => {
+      state.booting = false;
+      bootImg.hidden = true;
+      bootImg.removeAttribute('src');
+      showScreen();
+    }, length),
+  ];
+}
+
+function showScreen() {
+  if (state.booting) return;
+  canvas.hidden = prefs.mode !== 'game';
+  web.hidden = prefs.mode !== 'web';
+  if (prefs.mode === 'game') draw();
+  else if (!webOpen) openWeb(prefs.url);
+}
+
+// Most sites forbid being framed; the background worker lifts that for frames
+// in this tab while web mode is on. Resolves once the rule is in place.
+function allowFraming(on) {
+  if (!globalThis.chrome?.runtime?.id) return Promise.resolve();
+  return chrome.runtime.sendMessage({ type: 'gameboy:framing', on }).catch(() => {});
+}
+
+function toUrl(text) {
+  const t = text.trim();
+  if (!t) return HOME;
+  const withScheme = /^[a-z][\w+.-]*:/i.test(t) ? t : `https://${t}`;
+  try {
+    const url = new URL(withScheme);
+    // "foo bar" or "localhost-less" words are searches, not hostnames.
+    const looksLikeHost = /^https?:$/.test(url.protocol) && (url.hostname.includes('.') || url.hostname === 'localhost');
+    if (looksLikeHost && !/\s/.test(t)) return url.href;
+  } catch {}
+  return searchUrl(t);
+}
+
+// Cross-origin frames hide their history, so count loads ourselves to know
+// whether Back has anywhere to go.
+let webDepth = 0;
+let goingBack = false;
+let webOpen = false;
+
+async function openWeb(url) {
+  prefs.url = url;
+  urlInput.value = url === HOME ? '' : url;
+  savePrefs();
+  webOpen = true;
+  await allowFraming(true);
+  page.src = url;
+}
+
+function webBack() {
+  if (webDepth <= 1) return;
+  goingBack = true;
+  // Our frame's history.back() steps through the embedded page's navigations.
+  history.back();
+}
+
+// frame-reporter.js, running inside the embedded site, tells us where it is.
+window.addEventListener('message', (e) => {
+  if (e.source !== page.contentWindow || e.data?.type !== 'gameboy:page-location') return;
+  const { href } = e.data;
+  if (!webOpen || !/^https?:/.test(href)) return;
+  prefs.url = href;
+  if (document.activeElement !== urlInput) urlInput.value = href === HOME ? '' : href;
+  savePrefs();
+});
+
+page.addEventListener('load', () => {
+  if (!webOpen) return;
+  webDepth += goingBack ? -1 : 1;
+  goingBack = false;
+  webBackBtn.disabled = webDepth <= 1;
+});
+
+document.getElementById('urlbar').addEventListener('submit', (e) => {
+  e.preventDefault();
+  urlInput.blur();
+  openWeb(toUrl(urlInput.value));
+});
+webBackBtn.addEventListener('click', webBack);
+
+function renderMode() {
+  const toWeb = prefs.mode === 'game';
+  modeBtn.textContent = toWeb ? 'Web' : 'Game';
+  modeBtn.title = toWeb ? 'Browse the web on the screen' : 'Back to the game';
+}
+
+modeBtn.addEventListener('click', () => {
+  prefs.mode = prefs.mode === 'game' ? 'web' : 'game';
+  if (prefs.mode === 'game') {
+    // Unload the page (and its audio/video) rather than just hiding it.
+    webOpen = false;
+    page.src = 'about:blank';
+    allowFraming(false);
+    webDepth = 0;
+    webBackBtn.disabled = true;
+  }
+  renderMode();
+  savePrefs();
+  showScreen();
+});
+
+function setSkin(name) {
+  prefs.skin = name;
+  skinImg.src = asset(`skins/${name}.jpg`);
+  document.querySelectorAll('.swatch').forEach((el) => {
+    el.setAttribute('aria-pressed', el.dataset.skin === name);
+  });
+  savePrefs();
+}
+
+function renderSkinPicker() {
+  const container = document.getElementById('skins');
+  for (const name of SKINS) {
+    const el = document.createElement('button');
+    el.className = 'swatch';
+    el.dataset.skin = name;
+    el.title = name;
+    el.style.backgroundImage = `url(${asset(`skins/${name}.jpg`)})`;
+    el.addEventListener('click', () => setSkin(name));
+    container.append(el);
+  }
+}
+
+function renderBootMode() {
+  bootModeBtn.textContent = BOOTS[prefs.boot].label;
+}
+
+bootModeBtn.addEventListener('click', () => {
+  prefs.boot = prefs.boot === 'classic' ? 'color' : 'classic';
+  renderBootMode();
+  savePrefs();
+  boot();
+});
+
+document.querySelectorAll('[data-key]').forEach((btn) => {
+  btn.addEventListener('click', () => press(btn.dataset.key));
+});
+
+// The page hosting this frame (overlay.js) moves and resizes it; we only
+// report pointer deltas. Screen coordinates stay stable while the frame itself
+// moves or grows under the pointer.
+const shell = document.getElementById('gameboy');
+const grip = document.getElementById('grip');
+const toHost = (msg) => window.parent !== window && window.parent.postMessage(msg, '*');
+
+function trackPointer(el, { canStart = () => true, moveType, endType }) {
+  let from = null;
+  const end = () => {
+    if (!from) return;
+    from = null;
+    el.classList.remove('dragging');
+    toHost({ type: endType });
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !canStart(e)) return;
+    from = { x: e.screenX, y: e.screenY };
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('dragging');
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!from) return;
+    toHost({ type: moveType, dx: e.screenX - from.x, dy: e.screenY - from.y });
+    from = { x: e.screenX, y: e.screenY };
+  });
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+trackPointer(shell, {
+  canStart: (e) => !e.target.closest('button, input'),
+  moveType: 'gameboy:drag',
+  endType: 'gameboy:dragend',
+});
+trackPointer(grip, { moveType: 'gameboy:resize', endType: 'gameboy:resizeend' });
+
+// Everything is laid out for a 300px-wide shell; zoom it to the frame's size.
+function fitToFrame() {
+  const zoom = window.innerWidth / 300;
+  document.documentElement.style.zoom = zoom;
+  document.documentElement.style.setProperty('--zoom', zoom);
+}
+if (window.parent !== window) {
+  fitToFrame();
+  window.addEventListener('resize', fitToFrame);
+}
+
+document.getElementById('close').addEventListener('click', () => {
+  toHost({ type: 'gameboy:close' });
+});
+
+window.addEventListener('pagehide', () => allowFraming(false));
+
+const buttonFor = (key) => document.querySelector(`[data-key="${key}"]`);
+
+// Keys typed into the URL bar are text, not Game Boy buttons.
+const isTyping = (e) => e.target.closest?.('input');
+
+document.addEventListener('keydown', (e) => {
+  const key = KEYMAP[e.key];
+  if (key && !isTyping(e)) {
+    e.preventDefault();
+    buttonFor(key).classList.add('pressed');
+    press(key);
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  const key = KEYMAP[e.key];
+  if (key) buttonFor(key).classList.remove('pressed');
+});
+
+Promise.all([loadPrefs(), loadGame()]).then(([saved, game]) => {
+  Object.assign(prefs, saved);
+  Object.assign(state, game);
+  if (!SKINS.includes(prefs.skin)) prefs.skin = 'gray';
+  if (!BOOTS[prefs.boot]) prefs.boot = 'color';
+  if (prefs.mode !== 'web') prefs.mode = 'game';
+  renderSkinPicker();
+  setSkin(prefs.skin);
+  renderBootMode();
+  renderMode();
+  if (RESUME) showScreen();
+  else boot();
+});

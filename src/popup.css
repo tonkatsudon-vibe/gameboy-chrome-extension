@@ -1,0 +1,234 @@
+* { box-sizing: border-box; }
+
+body {
+  width: 300px;
+  margin: 0;
+  background: transparent;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* Skin images are 1076×1845; every overlay below is placed in % of that. */
+.gameboy {
+  position: relative;
+  width: 300px;
+  aspect-ratio: 1076 / 1845;
+  /* Clip the black corners and dark rim baked into the skin JPGs. The radii are
+     fitted to the shell's outline: tight top corners, a wide shallow curve at the bottom. */
+  clip-path: inset(0 0.4% 0.6% 0.4% round 2% 2% 40% 40% / 2% 2% 6% 6%);
+  overflow: hidden;
+  cursor: grab;
+}
+.gameboy.dragging { cursor: grabbing; }
+
+.skin {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.screen {
+  position: absolute;
+  left: 20.91%;
+  top: 8.29%;
+  width: 57.9%;
+  height: 31.06%;
+  overflow: hidden;
+  background: #000;
+}
+
+/* The boot GIFs are letterboxed 498×280; cover crops the black bars. */
+.boot,
+#screen {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.boot { object-fit: cover; }
+
+.web {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+}
+
+.urlbar {
+  display: flex;
+  flex: none;
+  height: 16px;
+  background: #1c1c1c;
+}
+.urlbar button {
+  width: 16px;
+  color: #eee;
+  font-size: 14px;
+  line-height: 1;
+}
+.urlbar button:disabled { color: #555; cursor: default; }
+.urlbar input {
+  flex: 1;
+  min-width: 0;
+  margin: 2px 2px 2px 0;
+  padding: 0 4px;
+  border: none;
+  border-radius: 3px;
+  background: #3a3a3a;
+  color: #eee;
+  font: 9px/12px "Helvetica Neue", Arial, sans-serif;
+  outline: none;
+}
+.urlbar input:focus { background: #4a4a4a; }
+
+/* Lay the page out at 1/0.45 × the screen size, then shrink it, so sites get a
+   phone-sized ~385px viewport instead of ~175px. */
+.web-page { flex: 1; position: relative; overflow: hidden; }
+#page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(100% / 0.45);
+  height: calc(100% / 0.45);
+  border: none;
+  transform: scale(0.45);
+  transform-origin: 0 0;
+}
+#screen { image-rendering: pixelated; }
+[hidden] { display: none !important; }
+
+button {
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+/* Hotspots sit over the buttons painted on the skin and darken when pressed. */
+.dpad,
+.round,
+.pill { position: absolute; }
+
+.dpad button:active, .dpad button.pressed,
+.round:active, .round.pressed,
+.pill:active, .pill.pressed { background: rgba(0, 0, 0, 0.3); }
+
+.dpad {
+  left: 7.62%;
+  top: 58.37%;
+  width: 25.56%;
+  height: 14.91%;
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+}
+.up    { grid-area: 1 / 2; border-radius: 4px 4px 0 0; }
+.left  { grid-area: 2 / 1; border-radius: 4px 0 0 4px; }
+.right { grid-area: 2 / 3; border-radius: 0 4px 4px 0; }
+.down  { grid-area: 3 / 2; border-radius: 0 0 4px 4px; }
+
+.round {
+  width: 12.3%;
+  height: 7.2%;
+  border-radius: 50%;
+}
+.b { left: 61.15%; top: 64.17%; }
+.a { left: 79.46%; top: 60.49%; }
+
+.pill {
+  top: 81.52%;
+  width: 9.11%;
+  height: 2.28%;
+  border-radius: 999px;
+}
+.select { left: 38.01%; }
+.start  { left: 52.42%; }
+
+/* Resize grip: three diagonal ridges, shown while hovering the Game Boy.
+   Divided by the page zoom so it stays grabbable when the shell is tiny. */
+.grip {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: calc(14px / var(--zoom, 1));
+  height: calc(14px / var(--zoom, 1));
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.15s;
+  background: linear-gradient(135deg,
+    transparent 45%, #fff 45%, #fff 52%, transparent 52%,
+    transparent 63%, #fff 63%, #fff 70%, transparent 70%,
+    transparent 81%, #fff 81%, #fff 88%, transparent 88%);
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+body:hover .grip,
+.grip.dragging { opacity: 1; }
+
+/* Hover zone along the bottom edge, below Select/Start. */
+.tray {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 12%;
+}
+
+.toolbar {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(20, 20, 20, 0.75);
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+  cursor: default;
+}
+.tray:hover .toolbar,
+.toolbar:focus-within {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.gameboy.dragging .toolbar { opacity: 0; pointer-events: none; }
+
+.skins { display: flex; gap: 4px; flex: 1; }
+
+/* Each swatch is a zoomed-in crop of the skin's shell, so its colour always matches. */
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-size: 1200%;
+  background-position: 3% 55%;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+}
+.swatch[aria-pressed="true"] { outline-color: #eee; }
+
+.boot-mode,
+.close {
+  color: #eee;
+  font-family: inherit;
+}
+.boot-mode {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: #555;
+  font-size: 10px;
+}
+.boot-mode:hover { background: #666; }
+.close {
+  width: 18px;
+  font-size: 16px;
+  line-height: 1;
+}
+.close:hover { color: #fff; }
