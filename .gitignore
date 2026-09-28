@@ -1,1 +1,3 @@
 .DS_Store
+# Game Boy ROMs are copyrighted: keep them local, never push them.
+roms/

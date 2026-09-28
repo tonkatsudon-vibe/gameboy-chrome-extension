@@ -1,5 +1,8 @@
+// GameBoy Plugin by Tonkatsudon (https://github.com/tonkatsudon-vibe/gameboy-chrome-extension)
+// MIT License, see LICENSE. Keep this notice in copies and forks.
+
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[Game Boy] installed');
+  console.log('[GameBoy Plugin] installed');
 });
 
 // Clicking the toolbar icon switches the Game Boy on or off in every tab.
@@ -14,7 +17,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     });
   } catch (err) {
     // chrome://, the Web Store and other protected pages can't be scripted.
-    console.warn('[Game Boy] cannot open on this page:', err.message);
+    console.warn('[GameBoy Plugin] cannot open on this page:', err.message);
   }
   const { overlayOpen } = await chrome.storage.local.get({ overlayOpen: false });
   await chrome.storage.local.set({ overlayOpen: !overlayOpen });
@@ -56,7 +59,7 @@ function setFraming(tabId, on) {
       removeRuleIds: [FRAMING_RULE_ID],
       addRules: tabIds.size ? [framingRule([...tabIds])] : [],
     });
-  }).catch((err) => console.warn('[Game Boy] framing rule update failed:', err));
+  }).catch((err) => console.warn('[GameBoy Plugin] framing rule update failed:', err));
   return framingQueue;
 }
 
@@ -97,7 +100,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg.action === 'prepare') return;
       return sendToOffscreen(msg.action, msg.sound);
     })
-    .catch((err) => console.warn('[Game Boy] sound failed:', err))
+    .catch((err) => console.warn('[GameBoy Plugin] sound failed:', err))
     .finally(() => sendResponse());
   return true;
 });

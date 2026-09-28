@@ -1,3 +1,5 @@
+/* GameBoy Plugin by Tonkatsudon. MIT License, see LICENSE. */
+
 * { box-sizing: border-box; }
 
 body {
@@ -42,7 +44,7 @@ body {
 
 /* The boot GIFs are letterboxed 498×280; cover crops the black bars. */
 .boot,
-#screen {
+#emu {
   display: block;
   width: 100%;
   height: 100%;
@@ -97,7 +99,20 @@ body {
   transform: scale(0.45);
   transform-origin: 0 0;
 }
-#screen { image-rendering: pixelated; }
+#emu { position: absolute; inset: 0; border: none; pointer-events: none; visibility: hidden; }
+.no-game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #9bbc0f;
+  color: #0f380f;
+  font: bold 11px/1.4 monospace;
+  text-align: center;
+}
+.no-game[hidden] { display: none; }
+.no-game small { font-size: 8px; font-weight: normal; }
 [hidden] { display: none !important; }
 
 button {
@@ -181,10 +196,10 @@ body:hover .grip,
   right: 16px;
   bottom: 12px;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  border-radius: 999px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: 12px;
   background: rgba(20, 20, 20, 0.75);
   opacity: 0;
   transform: translateY(6px);
@@ -200,7 +215,22 @@ body:hover .grip,
 }
 .gameboy.dragging .toolbar { opacity: 0; pointer-events: none; }
 
+.toolbar-row { display: flex; align-items: center; gap: 8px; }
 .skins { display: flex; gap: 4px; flex: 1; }
+
+.game-pick {
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 8px;
+  background: #555;
+  color: #eee;
+  font: 10px "Helvetica Neue", Arial, sans-serif;
+  cursor: pointer;
+}
+.game-pick:hover { background: #666; }
 
 /* Each swatch is a zoomed-in crop of the skin's shell, so its colour always matches. */
 .swatch {

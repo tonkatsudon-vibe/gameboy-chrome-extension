@@ -1,3 +1,6 @@
+// GameBoy Plugin by Tonkatsudon (https://github.com/tonkatsudon-vibe/gameboy-chrome-extension)
+// MIT License, see LICENSE. Keep this notice in copies and forks.
+
 // Runs on every page (and is injected on toolbar click into tabs that predate
 // the extension). While the Game Boy is switched on, it floats as a draggable,
 // resizable iframe (popup.html) over whichever tab is visible. Navigating or
