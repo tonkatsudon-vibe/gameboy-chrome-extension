@@ -21,6 +21,9 @@ body {
   clip-path: inset(0 0.4% 0.6% 0.4% round 2% 2% 40% 40% / 2% 2% 6% 6%);
   overflow: hidden;
   cursor: grab;
+  /* Holding a button is gameplay: no browser panning, zooming or press-and-hold callouts. */
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 .gameboy.dragging { cursor: grabbing; }
 
@@ -197,6 +200,16 @@ button {
 }
 body:hover .grip,
 .grip.dragging { opacity: 1; }
+
+/* Full screen: the shell is centred on black and can't be dragged or resized. */
+html:fullscreen {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  background: #000;
+}
+html:fullscreen .gameboy { cursor: default; }
+html:fullscreen .grip { display: none; }
 
 /* Hover zone along the bottom edge, below Select/Start. */
 .tray {

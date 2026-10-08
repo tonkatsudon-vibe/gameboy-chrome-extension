@@ -83,7 +83,8 @@
     frame = document.createElement('iframe');
     frame.id = ID;
     frame.src = chrome.runtime.getURL(`src/popup.html${resume ? '?resume' : ''}`);
-    frame.allow = 'autoplay';
+    // fullscreen: the shell's Full button takes the whole screen from inside the frame.
+    frame.allow = 'autoplay; fullscreen';
     frame.setAttribute('allowtransparency', 'true');
     Object.assign(frame.style, {
       position: 'fixed',

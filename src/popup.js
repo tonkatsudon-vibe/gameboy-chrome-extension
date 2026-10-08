@@ -697,16 +697,27 @@ function trackPointer(el, { canStart = () => true, startType, moveType, endType 
 }
 
 trackPointer(shell, {
-  canStart: (e) => !e.target.closest('button, input, select, .saves'),
+  canStart: (e) => !document.fullscreenElement && !e.target.closest('button, input, select, .saves'),
   startType: 'gameboy:dragstart',
   moveType: 'gameboy:drag',
   endType: 'gameboy:dragend',
 });
 trackPointer(grip, { moveType: 'gameboy:resize', endType: 'gameboy:resizeend' });
 
+// A long press opens the browser's context menu or starts a drag/selection,
+// which steals focus (dropping full screen) and lets go of the held button.
+// The URL bar and web page keep their own menus.
+for (const type of ['contextmenu', 'dragstart', 'selectstart']) {
+  shell.addEventListener(type, (e) => {
+    if (!e.target.closest('input, .web-page')) e.preventDefault();
+  });
+}
+
 // Everything is laid out for a 300px-wide shell; zoom it to the frame's size.
+// The frame keeps the shell's aspect ratio, except in full screen, where the
+// shell fits the screen's height instead.
 function fitToFrame() {
-  const zoom = window.innerWidth / 300;
+  const zoom = Math.min(window.innerWidth / 300, window.innerHeight / (300 * 1845 / 1076));
   document.documentElement.style.zoom = zoom;
   document.documentElement.style.setProperty('--zoom', zoom);
 }
@@ -719,6 +730,18 @@ document.getElementById('close').addEventListener('click', () => {
   toHost({ type: 'gameboy:close' });
 });
 
+// Like F11, but just the Game Boy fills the screen. Esc (or the button) exits.
+const fullscreenBtn = document.getElementById('fullscreen');
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(() => {});
+}
+fullscreenBtn.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', () => {
+  fullscreenBtn.textContent = document.fullscreenElement ? 'Exit' : 'Full';
+  fullscreenBtn.title = document.fullscreenElement ? 'Exit full screen (F11 or Esc)' : 'Full screen (F11)';
+});
+
 window.addEventListener('pagehide', () => allowFraming(false));
 
 const buttonFor = (key) => document.querySelector(`[data-key="${key}"]`);
@@ -728,6 +751,11 @@ const isTyping = (e) => e.target.closest?.('input');
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.savesOpen) return closeSaves();
+  // While the Game Boy has focus, F11 makes just it full screen, not the browser.
+  if (e.key === 'F11') {
+    e.preventDefault();
+    return toggleFullscreen();
+  }
   const key = KEYMAP[e.key];
   if (key && !isTyping(e)) {
     e.preventDefault();
