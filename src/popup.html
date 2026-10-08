@@ -17,7 +17,13 @@
       <!-- The real game: a sandboxed EmulatorJS page (emulator.html). It never
            takes clicks or focus; popup.js forwards the shell's buttons to it. -->
       <iframe id="emu" title="Game" tabindex="-1" allow="autoplay *; gamepad *"></iframe>
-      <div class="no-game" id="no-game" hidden>NO CARTRIDGE<br><small>Put .gb files in roms/</small></div>
+      <!-- What the boot ROM shows with no cartridge in: the logo reads back as
+           a black bar. Drawn by popup.js; clicking it loads a ROM. -->
+      <button class="no-game" id="no-game" title="Load a .gb / .gbc ROM" hidden>
+        <canvas id="no-game-art" width="498" height="280"></canvas>
+        <small>Click to load a ROM</small>
+      </button>
+      <input type="file" id="rom-input" accept=".gb,.gbc" hidden>
       <div class="web" id="web" hidden>
         <form class="urlbar" id="urlbar">
           <button type="button" id="web-back" title="Back (B)" aria-label="Back" disabled>&lsaquo;</button>
@@ -47,6 +53,7 @@
       <div class="toolbar">
         <div class="toolbar-row">
           <div class="skins" id="skins"></div>
+          <button class="boot-mode" id="saves-open" title="Export, import or delete save files">Saves</button>
           <button class="close" id="close" title="Close" aria-label="Close">&times;</button>
         </div>
         <div class="toolbar-row">
@@ -55,6 +62,18 @@
           <button class="boot-mode" id="mode"></button>
         </div>
       </div>
+    </div>
+
+    <div class="saves" id="saves" role="dialog" aria-labelledby="saves-title" hidden>
+      <div class="saves-card">
+        <div class="saves-head">
+          <h2 id="saves-title">Save files</h2>
+          <button class="close" id="saves-close" title="Close" aria-label="Close">&times;</button>
+        </div>
+        <ul class="saves-list" id="saves-list"></ul>
+        <p class="saves-note">Importing or deleting a save restarts that game from its title screen.</p>
+      </div>
+      <input type="file" id="save-input" accept=".sav,.srm" hidden>
     </div>
   </div>
 

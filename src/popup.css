@@ -101,18 +101,35 @@ body {
 }
 #emu { position: absolute; inset: 0; border: none; pointer-events: none; visibility: hidden; }
 .no-game {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  display: block;
+  width: 100%;
   height: 100%;
-  background: #9bbc0f;
-  color: #0f380f;
-  font: bold 11px/1.4 monospace;
-  text-align: center;
+  background: #fff;
 }
-.no-game[hidden] { display: none; }
-.no-game small { font-size: 8px; font-weight: normal; }
+.no-game canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Same crop as the boot GIF: cover trims its black letterbox bars. */
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+/* Hidden until hovered, so the screen looks like the real thing. */
+.no-game small {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  color: #fff;
+  font: 8px "Helvetica Neue", Arial, sans-serif;
+  text-shadow: 0 0 2px #000, 0 0 2px #000;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.no-game:hover small,
+.no-game small.show { opacity: 1; }
 [hidden] { display: none !important; }
 
 button {
@@ -262,3 +279,46 @@ body:hover .grip,
   line-height: 1;
 }
 .close:hover { color: #fff; }
+
+/* Save files panel, laid over the whole shell. */
+.saves {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+.saves-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 80%;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(20, 20, 20, 0.92);
+  color: #eee;
+  font-size: 10px;
+}
+.saves-head { display: flex; align-items: center; margin-bottom: 6px; }
+.saves-head h2 { flex: 1; margin: 0; font-size: 12px; }
+.saves-list { flex: 1; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.saves-list li { padding: 6px 0; border-top: 1px solid #333; }
+.saves-list .name { overflow: hidden; font-weight: bold; text-overflow: ellipsis; white-space: nowrap; }
+.saves-list .meta { margin: 1px 0 4px; color: #999; font-size: 9px; }
+.saves-list .actions { display: flex; gap: 4px; }
+.saves-list .actions button {
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: #555;
+  color: #eee;
+  font: 9px "Helvetica Neue", Arial, sans-serif;
+}
+.saves-list .actions button:hover:not(:disabled) { background: #666; }
+.saves-list .actions button:disabled { color: #777; cursor: default; }
+.saves-list .actions .danger { background: #8b2a2a; }
+.saves-list .actions .danger:hover:not(:disabled) { background: #a33; }
+.saves-empty { padding: 6px 0; color: #999; }
+.saves-note { margin: 6px 0 0; color: #888; font-size: 8px; }

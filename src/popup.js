@@ -29,14 +29,16 @@ const bootModeBtn = document.getElementById('boot-mode');
 const emu = document.getElementById('emu');
 const noGame = document.getElementById('no-game');
 const gamePick = document.getElementById('game-pick');
+const romInput = document.getElementById('rom-input');
 const web = document.getElementById('web');
 const page = document.getElementById('page');
 const urlInput = document.getElementById('url');
 const webBackBtn = document.getElementById('web-back');
 const modeBtn = document.getElementById('mode');
 
-const prefs = { skin: 'gray', boot: 'color', mode: 'game', url: HOME, game: null };
-const state = { booting: false };
+// game: the cartridge in the slot, or '' when it's been ejected.
+const prefs = { skin: 'gray', boot: 'color', mode: 'game', url: HOME, game: 'tobudx.gb' };
+const state = { booting: false, savesOpen: false };
 let bootTimers = [];
 let localSound = null;
 
@@ -69,23 +71,142 @@ const RESUME = new URLSearchParams(location.search).has('resume');
 
 /* ---------- Cartridges ---------- */
 
-// roms/roms.json lists the games; roms/ is gitignored, so a fresh clone has none.
-let games = []; // [{ file, name, default }]
+// One freely licensed homebrew game ships in assets/cartridges/ (see the
+// LICENSE file there). Everything else is the player's own .gb/.gbc files,
+// kept in local storage (key rom:<file>) so every page can play them. "games"
+// lists those; saves stay keyed by file name, so reloading a removed ROM picks
+// its save back up.
+const BUILT_IN = [
+  { file: 'tobudx.gb', name: 'Tobu Tobu Girl Deluxe', url: asset('cartridges/tobudx.gb') },
+];
+const romKey = (game) => `rom:${game}`;
+let games = []; // [{ file, name }]
+const allGames = () => [...BUILT_IN, ...games.filter((g) => !BUILT_IN.some((b) => b.file === g.file))];
+const isBuiltIn = (game) => BUILT_IN.some((b) => b.file === game);
+
+const LOAD_ROM = '__load__';
+const EJECT = '__eject__';
+const REMOVE_ROM = '__remove__';
 
 async function loadGames() {
-  if (!globalThis.chrome?.runtime?.id) return;
-  try {
-    const res = await fetch(chrome.runtime.getURL('roms/roms.json'));
-    if (res.ok) games = await res.json();
-  } catch {}
+  if (!storage) return;
+  ({ games } = await storage.get({ games: [] }));
 }
 
 function renderGamePicker() {
   gamePick.textContent = '';
-  for (const g of games) gamePick.add(new Option(g.name || g.file, g.file));
-  if (!games.length) gamePick.add(new Option('No games', ''));
-  gamePick.value = prefs.game ?? '';
-  gamePick.disabled = !games.length;
+  if (!prefs.game) gamePick.add(new Option('No cartridge', ''));
+  for (const g of allGames()) gamePick.add(new Option(g.name || g.file, g.file));
+  gamePick.add(new Option('Load ROM…', LOAD_ROM));
+  if (prefs.game) gamePick.add(new Option('Eject cartridge', EJECT));
+  if (prefs.game && !isBuiltIn(prefs.game)) gamePick.add(new Option('Remove this game', REMOVE_ROM));
+  gamePick.value = prefs.game;
+  gamePick.disabled = !storage;
+}
+
+// The cartridge header's title (0x134-0x143), padded with zeros. Color-era
+// carts shorten it to 11 bytes and follow it with a 4-letter maker code.
+function romTitle(bytes) {
+  const raw = String.fromCharCode(...bytes.subarray(0x134, 0x144));
+  let title = raw.replace(/[^\x20-\x7e].*$/, '');
+  if (bytes[0x143] & 0x80 && /^[A-Z0-9]{4}$/.test(raw.slice(11, 15))) title = title.slice(0, 11);
+  return title.replace(/_/g, ' ').trim();
+}
+
+// Every Game Boy cartridge carries the Nintendo logo at 0x104, which the
+// boot ROM checks; its first bytes are enough to reject non-ROM files.
+const looksLikeRom = (bytes) => bytes.length >= 0x150
+  && bytes[0x104] === 0xce && bytes[0x105] === 0xed && bytes[0x106] === 0x66 && bytes[0x107] === 0x66;
+
+async function addRom(file) {
+  if (!/\.gbc?$/i.test(file.name)) return alertScreen('Pick a .gb or .gbc file');
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!looksLikeRom(bytes)) return alertScreen('Not a Game Boy ROM');
+  if (isBuiltIn(file.name)) return switchGame(file.name);
+  const entry = { file: file.name, name: romTitle(bytes) || file.name.replace(/\.gbc?$/i, '') };
+  games = [...games.filter((g) => g.file !== entry.file), entry];
+  await storage.set({ games, [romKey(entry.file)]: toBase64(bytes) });
+  switchGame(entry.file);
+}
+
+async function removeRom(game) {
+  if (emuStarted) toEmu({ type: 'flush' });
+  games = games.filter((g) => g.file !== game);
+  await storage.set({ games });
+  await storage.remove(romKey(game));
+  await session.remove(resumeKey(game));
+  prefs.game = '';
+  savePrefs();
+  renderGamePicker();
+  unloadCartridge();
+  showScreen();
+}
+
+// Shown on the no-cartridge screen, which a ROM problem should explain.
+function alertScreen(text) {
+  noGameHint.textContent = text;
+  noGameHint.classList.add('show');
+  setTimeout(() => {
+    noGameHint.textContent = NO_GAME_HINT;
+    noGameHint.classList.remove('show');
+  }, 3000);
+}
+const noGameHint = noGame.querySelector('small');
+const NO_GAME_HINT = noGameHint.textContent;
+
+romInput.addEventListener('change', () => {
+  const [file] = romInput.files;
+  romInput.value = '';
+  if (file) addRom(file).catch((err) => {
+    console.warn('[GameBoy Plugin] loading ROM failed:', err);
+    alertScreen('Could not load that ROM');
+  });
+});
+noGame.addEventListener('click', () => romInput.click());
+
+// With no cartridge in, the boot animation runs as usual, but the Nintendo
+// logo is read from the cartridge, so it comes out as a solid black box. This
+// is the boot GIF's resting frame with that box drawn over the logo.
+// frame: index into the GIF (negative counts from the end); box: [x, y, w, h]
+// of "Nintendo" (not the ®) in that frame, measured from the 498×280 GIFs, plus 1px.
+const NO_CARTRIDGE = {
+  classic: { frame: 60, box: [155, 124, 191, 33] },
+  color: { frame: -1, box: [201, 201, 99, 18] },
+};
+const noGameArt = document.getElementById('no-game-art');
+const restFrames = {}; // boot → Promise<ImageBitmap>
+
+function restFrame(boot) {
+  restFrames[boot] ??= (async () => {
+    const data = await (await fetch(asset(BOOTS[boot].gif))).arrayBuffer();
+    const decoder = new ImageDecoder({ data, type: 'image/gif' });
+    await decoder.tracks.ready;
+    const { frame } = NO_CARTRIDGE[boot];
+    const count = decoder.tracks.selectedTrack.frameCount;
+    const { image } = await decoder.decode({ frameIndex: frame < 0 ? count + frame : frame });
+    const bitmap = await createImageBitmap(image);
+    image.close();
+    decoder.close();
+    return bitmap;
+  })();
+  return restFrames[boot];
+}
+
+async function drawNoCartridge() {
+  const boot = prefs.boot;
+  let bitmap = null;
+  try {
+    bitmap = await restFrame(boot);
+  } catch (err) {
+    console.warn('[GameBoy Plugin] boot frame failed:', err);
+  }
+  if (boot !== prefs.boot) return; // switched again while decoding
+  const ctx = noGameArt.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, noGameArt.width, noGameArt.height);
+  if (bitmap) ctx.drawImage(bitmap, 0, 0);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(...NO_CARTRIDGE[boot].box);
 }
 
 /* ---------- Emulator ---------- */
@@ -103,17 +224,26 @@ function loadCartridge(game) {
   emu.src = `emulator.html?${Date.now()}`;
 }
 
+function unloadCartridge() {
+  emuGame = null;
+  emuReady = false;
+  emuStarted = false;
+  emu.removeAttribute('src');
+}
+
 async function sendCartridge() {
   if (!emuReady || !emuGame) return;
   emuReady = false;
   const game = emuGame;
-  const entry = games.find((g) => g.file === game);
-  const [rom, stored, resumed] = await Promise.all([
-    fetch(chrome.runtime.getURL(`roms/${game}`)).then((r) => r.arrayBuffer()),
-    storage.get(saveKey(game)),
+  const entry = allGames().find((g) => g.file === game);
+  const [stored, resumed, bundled] = await Promise.all([
+    storage.get([romKey(game), saveKey(game)]),
     session.get(resumeKey(game)),
+    entry?.url ? fetch(entry.url).then((r) => r.arrayBuffer()) : null,
   ]);
   if (game !== emuGame) return; // switched again while reading
+  const rom = bundled ?? (stored[romKey(game)] ? fromBase64(stored[romKey(game)]) : null);
+  if (!rom) return;
   const save = stored[saveKey(game)];
   const snapshot = resumed[resumeKey(game)];
   // Paused until the boot animation is over or while web mode is showing.
@@ -122,7 +252,9 @@ async function sendCartridge() {
     type: 'load',
     fileName: game,
     name: entry?.name || game,
-    core: /\.gbc$/i.test(game) ? 'gbc' : 'gb',
+    // EmulatorJS has no 'gbc' system; its 'gb' core (gambatte) reads the
+    // cartridge header and runs Game Boy Color games in color on its own.
+    core: 'gb',
     rom,
     save: save ? fromBase64(save) : null,
     state: snapshot ? fromBase64(snapshot) : null,
@@ -130,7 +262,7 @@ async function sendCartridge() {
 }
 
 // The game shows and runs only in game mode once the boot animation is done.
-const screenLive = () => !state.booting && prefs.mode === 'game' && !!prefs.game;
+const screenLive = () => !state.booting && !state.savesOpen && prefs.mode === 'game' && !!prefs.game;
 
 function syncEmu() {
   const live = screenLive();
@@ -147,7 +279,10 @@ window.addEventListener('message', (e) => {
     sendCartridge();
   } else if (msg.type === 'started') {
     emuStarted = true;
+    frozenGame = null;
     syncEmu();
+  } else if (msg.game && msg.game === frozenGame) {
+    // The old frame's last words after its save was replaced; drop them.
   } else if (msg.type === 'save' && msg.game) {
     storage.set({ [saveKey(msg.game)]: toBase64(msg.data) });
   } else if (msg.type === 'state' && msg.game) {
@@ -156,11 +291,21 @@ window.addEventListener('message', (e) => {
 });
 
 gamePick.addEventListener('change', () => {
-  if (!gamePick.value || gamePick.value === prefs.game) return;
+  const picked = gamePick.value;
+  gamePick.value = prefs.game;
+  if (picked === LOAD_ROM) romInput.click();
+  else if (picked === EJECT) switchGame('');
+  else if (picked === REMOVE_ROM) removeRom(prefs.game);
+  else if (picked && picked !== prefs.game) switchGame(picked);
+});
+
+// game: a cartridge to put in, or '' to eject and show the empty boot screen.
+function switchGame(game) {
   // Leave the old game where it was, so picking it again resumes it.
   if (emuStarted) toEmu({ type: 'flush' });
-  prefs.game = gamePick.value;
+  prefs.game = game;
   savePrefs();
+  renderGamePicker();
   if (prefs.mode !== 'game') {
     prefs.mode = 'game';
     leaveWeb();
@@ -168,15 +313,147 @@ gamePick.addEventListener('change', () => {
   }
   // Give the flushed save/state a moment to arrive before the frame goes.
   setTimeout(() => {
-    loadCartridge(prefs.game);
+    if (prefs.game) loadCartridge(prefs.game);
+    else unloadCartridge();
     showScreen();
   }, 150);
+}
+
+/* ---------- Save files ---------- */
+
+const savesPanel = document.getElementById('saves');
+const savesList = document.getElementById('saves-list');
+const saveInput = document.getElementById('save-input');
+const MAX_SAVE = 256 * 1024; // real cartridges top out at 128KB of SRAM
+
+// Set while a game's save is being replaced: messages from its old frame are
+// ignored until the reloaded frame says 'started'.
+let frozenGame = null;
+let importFor = null;
+const saveMeta = new Map(); // file → its row's status line
+
+const sizeLabel = (bytes) => (bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`);
+const savedBytes = (b64) => Math.floor((b64.length * 3) / 4) - (b64.match(/=*$/)[0].length);
+
+// Saves outlive their ROMs, so list every game that has either.
+async function renderSaves() {
+  const keys = storage.getKeys ? await storage.getKeys() : Object.keys(await storage.get(null));
+  const saveKeys = keys.filter((k) => k.startsWith('save:'));
+  const saves = await storage.get(saveKeys);
+  const rows = allGames().map((g) => ({ file: g.file, name: g.name || g.file }));
+  for (const k of saveKeys) {
+    const file = k.slice('save:'.length);
+    if (!rows.some((r) => r.file === file)) rows.push({ file, name: file, orphan: true });
+  }
+
+  savesList.textContent = '';
+  saveMeta.clear();
+  if (!rows.length) {
+    const empty = document.createElement('li');
+    empty.className = 'saves-empty';
+    empty.textContent = 'No games or saves yet.';
+    savesList.append(empty);
+  }
+  for (const { file, name, orphan } of rows) {
+    const save = saves[saveKey(file)];
+    const li = document.createElement('li');
+    const title = document.createElement('div');
+    title.className = 'name';
+    title.textContent = name;
+    title.title = file;
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = (save ? `${sizeLabel(savedBytes(save))} save` : 'No save') + (orphan ? ' · ROM removed' : '');
+    saveMeta.set(file, meta);
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const btn = (label, onClick, { disabled = false, danger = false } = {}) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.disabled = disabled;
+      if (danger) b.className = 'danger';
+      b.addEventListener('click', () => onClick(b));
+      actions.append(b);
+    };
+    btn('Export', () => exportSave(file, save), { disabled: !save });
+    btn('Import', () => { importFor = file; saveInput.click(); });
+    btn('Delete', (b) => confirmThen(b, () => replaceSave(file, null)), { disabled: !save, danger: true });
+    li.append(title, meta, actions);
+    savesList.append(li);
+  }
+}
+
+// A second click within 3s confirms; no blocking dialogs in a framed page.
+function confirmThen(button, action) {
+  if (button.dataset.armed) return action();
+  button.dataset.armed = '1';
+  button.textContent = 'Sure?';
+  setTimeout(() => {
+    delete button.dataset.armed;
+    button.textContent = 'Delete';
+  }, 3000);
+}
+
+function exportSave(file, b64) {
+  const url = URL.createObjectURL(new Blob([fromBase64(b64)], { type: 'application/octet-stream' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${file.replace(/\.gbc?$/i, '')}.sav`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// data: an ArrayBuffer to store, or null to delete. The resume snapshot holds
+// the old save too, so it goes, and a running copy of the game is reloaded.
+async function replaceSave(file, data) {
+  const running = file === emuGame;
+  if (running) {
+    frozenGame = file;
+    unloadCartridge();
+  }
+  if (data) await storage.set({ [saveKey(file)]: toBase64(data) });
+  else await storage.remove(saveKey(file));
+  await session.remove(resumeKey(file));
+  if (running) loadCartridge(file);
+  renderSaves();
+}
+
+saveInput.addEventListener('change', async () => {
+  const [picked] = saveInput.files;
+  saveInput.value = '';
+  const file = importFor;
+  importFor = null;
+  if (!picked || !file) return;
+  if (!picked.size || picked.size > MAX_SAVE) {
+    const meta = saveMeta.get(file);
+    if (meta) meta.textContent = 'Not a Game Boy save file';
+    return;
+  }
+  await replaceSave(file, await picked.arrayBuffer());
 });
+
+function openSaves() {
+  if (!storage) return;
+  state.savesOpen = true;
+  savesPanel.hidden = false;
+  syncEmu(); // pausing makes the emulator flush its latest save
+  // Give that flushed save a moment to land before listing sizes.
+  setTimeout(renderSaves, 150);
+}
+
+function closeSaves() {
+  state.savesOpen = false;
+  savesPanel.hidden = true;
+  showScreen();
+}
+
+document.getElementById('saves-open').addEventListener('click', openSaves);
+document.getElementById('saves-close').addEventListener('click', closeSaves);
 
 /* ---------- Buttons ---------- */
 
 function press(key) {
-  if (state.booting) return;
+  if (state.booting || state.savesOpen) return;
   if (prefs.mode === 'web') {
     if (key === 'b') webBack();
     if (key === 'start') urlInput.focus();
@@ -351,6 +628,7 @@ function renderSkinPicker() {
 }
 
 function renderBootMode() {
+  drawNoCartridge();
   bootModeBtn.textContent = BOOTS[prefs.boot].label;
 }
 
@@ -388,8 +666,9 @@ const shell = document.getElementById('gameboy');
 const grip = document.getElementById('grip');
 const toHost = (msg) => window.parent !== window && window.parent.postMessage(msg, '*');
 
-function trackPointer(el, { canStart = () => true, moveType, endType }) {
+function trackPointer(el, { canStart = () => true, startType, moveType, endType }) {
   let from = null;
+  let grab = null; // sent with startType on the first move, not on a plain click
   const end = () => {
     if (!from) return;
     from = null;
@@ -401,9 +680,15 @@ function trackPointer(el, { canStart = () => true, moveType, endType }) {
     from = { x: e.screenX, y: e.screenY };
     el.setPointerCapture(e.pointerId);
     el.classList.add('dragging');
+    // Where on the shell it was grabbed, as fractions, so the host can
+    // shrink it around that point and keep it under the pointer.
+    const r = el.getBoundingClientRect();
+    grab = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
   });
   el.addEventListener('pointermove', (e) => {
     if (!from) return;
+    if (grab && startType) toHost({ type: startType, ...grab });
+    grab = null;
     toHost({ type: moveType, dx: e.screenX - from.x, dy: e.screenY - from.y });
     from = { x: e.screenX, y: e.screenY };
   });
@@ -412,7 +697,8 @@ function trackPointer(el, { canStart = () => true, moveType, endType }) {
 }
 
 trackPointer(shell, {
-  canStart: (e) => !e.target.closest('button, input, select'),
+  canStart: (e) => !e.target.closest('button, input, select, .saves'),
+  startType: 'gameboy:dragstart',
   moveType: 'gameboy:drag',
   endType: 'gameboy:dragend',
 });
@@ -441,6 +727,7 @@ const buttonFor = (key) => document.querySelector(`[data-key="${key}"]`);
 const isTyping = (e) => e.target.closest?.('input');
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.savesOpen) return closeSaves();
   const key = KEYMAP[e.key];
   if (key && !isTyping(e)) {
     e.preventDefault();
@@ -465,9 +752,9 @@ window.addEventListener('blur', () => {
 
 Promise.all([loadPrefs(), loadGames()]).then(([saved]) => {
   Object.assign(prefs, saved);
-  if (!games.some((g) => g.file === prefs.game)) {
-    prefs.game = (games.find((g) => g.default) ?? games[0])?.file ?? null;
-  }
+  // A ROM removed in another tab, or null from before eject existed.
+  if (prefs.game == null) prefs.game = '';
+  if (prefs.game && !allGames().some((g) => g.file === prefs.game)) prefs.game = BUILT_IN[0].file;
   renderGamePicker();
   // Start loading the cartridge under the boot animation; it waits paused.
   if (prefs.mode === 'game' && prefs.game) loadCartridge(prefs.game);

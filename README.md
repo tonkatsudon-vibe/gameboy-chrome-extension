@@ -41,19 +41,23 @@ The screen runs a real Game Boy / Game Boy Color emulator
 from jsDelivr). Hover the bottom edge of the shell and pick a game from the
 dropdown in the toolbar.
 
-Games come from the `roms/` folder, listed in `roms/roms.json`. The entry
-marked `"default": true` plays first:
+**One demo cartridge is included:** [Tobu Tobu Girl Deluxe](https://tangramgames.dk/tobutobugirldx)
+by Tangram Games, a free homebrew game whose code is MIT-licensed and whose
+art and music are [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+(see [`assets/cartridges/LICENSE-tobudx.txt`](assets/cartridges/LICENSE-tobudx.txt)).
+It's in the slot the first time you switch the Game Boy on.
 
-```json
-[
-  { "file": "pokemon_yellow.gb", "name": "Pokémon Yellow", "default": true },
-  { "file": "pokemon_red.gb", "name": "Pokémon Red" }
-]
-```
+**No commercial ROMs are included.** They're copyrighted, so the extension
+doesn't ship or link to any. Load `.gb` / `.gbc` files you own with
+**Load ROM…** in the game dropdown, or by clicking the empty boot screen. A
+loaded ROM is copied into the extension's storage (`chrome.storage.local`, key
+`rom:<file name>`), so it's available on every page until you pick
+**Remove this game**. Removing a game keeps its save, so loading the same file
+again picks up where you left off.
 
-**No ROMs are included.** Game ROMs are copyrighted, so `roms/` is gitignored.
-Put `.gb` / `.gbc` files you own there, list them in `roms.json`, and reload the
-extension.
+**Eject cartridge** in the dropdown empties the slot. Like a real Game Boy
+with nothing in it, the boot screen then shows a black box where the Nintendo
+logo should be.
 
 - **Page changes.** The Game Boy is rebuilt on every page and tab, so the
   running game is snapshotted every 2s and picks up where it was on the next
@@ -64,12 +68,24 @@ extension.
 
 | What | Stored in | Survives closing Chrome? |
 | ---- | --------- | :----------------------: |
+| **Loaded ROM** | `chrome.storage.local`, key `rom:<rom file>` | ✅ Yes |
 | **In-game save** (choosing SAVE in the game) | `chrome.storage.local`, key `save:<rom file>` (e.g. `save:pokemon_yellow.gb`) | ✅ Yes |
 | **Exact spot you left off** (snapshot every 2s) | `chrome.storage.session`, key `resume:<rom file>` | ❌ No, only between pages and tabs while Chrome is open |
 
 On disk, `chrome.storage.local` lives in your Chrome profile, e.g.
 `~/Library/Application Support/Google/Chrome/Default/Local Extension Settings/<extension-id>/`
 on macOS. It's Chrome's internal database, not a file you can open.
+
+### Managing save files
+
+Click **Saves** in the toolbar to manage each game's battery save:
+
+- **Export** downloads it as a `.sav` file, for a backup or another emulator.
+- **Import** replaces it with a `.sav` / `.srm` file, e.g. from another emulator.
+- **Delete** removes it (click twice to confirm).
+
+Importing or deleting a save restarts that game from its title screen, because
+the "where you left off" snapshot still holds the old save.
 
 ### Before closing Chrome
 
@@ -90,11 +106,11 @@ on macOS. It's Chrome's internal database, not a file you can open.
 - ✅ **Safe:** closing Chrome, restarting the computer, and reloading the
   extension (↻ in `chrome://extensions`) from the same folder.
 - ❌ **Removing the extension** in `chrome://extensions` deletes its storage,
-  saves included.
+  saves included. **Export** them from the Saves panel first.
 - ❌ **Moving or renaming the extension's folder** can give it a new extension
   ID, and then it can't see its old saves.
-- ⚠️ **Saves are tied to the ROM's file name.** Renaming `pokemon_yellow.gb`
-  means the game won't find its old save.
+- ⚠️ **Saves are tied to the ROM's file name.** Loading it under a different
+  file name means the game won't find its old save.
 
 ## Skins & boot
 
@@ -155,5 +171,10 @@ forwards button presses, and stores what it reports back.
 - Emulation by [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS)
   (GPL-3.0). It's fetched from jsDelivr at runtime and isn't part of this
   repository.
+- Demo cartridge: **Tobu Tobu Girl Deluxe** by
+  [Tangram Games](https://tangramgames.dk/tobutobugirldx)
+  ([source](https://github.com/SimonLarsen/tobutobugirl-dx)). Code under the
+  MIT License, assets under CC BY 4.0. Included unmodified; see
+  [`assets/cartridges/LICENSE-tobudx.txt`](assets/cartridges/LICENSE-tobudx.txt).
 - Game Boy, Game Boy Color and Pokémon are trademarks of Nintendo. This is a
   fan project with no affiliation to Nintendo.
