@@ -9,14 +9,14 @@ body {
   overflow: hidden;
 }
 
-/* Skin images are 1076×1845; every overlay below is placed in % of that. */
+/* Shells are drawn on a 1076×1845 grid; every overlay below is placed in % of that. */
 .gameboy {
   position: relative;
   width: 300px;
   aspect-ratio: 1076 / 1845;
-  /* Clip the black corners and dark rim baked into the skin JPGs. The radii are
-     fitted to the shell's outline: tight top corners, a wide shallow curve at the bottom. */
-  clip-path: inset(0 0.4% 0.6% 0.4% round 2% 2% 40% 40% / 2% 2% 6% 6%);
+  /* Follow the shell's rounded corners, so the clear corners outside it don't
+     take clicks or start a drag. */
+  clip-path: inset(0 round 9.6% / 5.6%);
   overflow: hidden;
   cursor: grab;
 }
@@ -40,14 +40,11 @@ body {
   background: #000;
 }
 
-/* The boot GIFs are letterboxed 498×280; cover crops the black bars. */
-.boot,
 #screen {
   display: block;
   width: 100%;
   height: 100%;
 }
-.boot { object-fit: cover; }
 
 .web {
   display: flex;
@@ -107,7 +104,7 @@ button {
   background: transparent;
 }
 
-/* Hotspots sit over the buttons painted on the skin and darken when pressed. */
+/* Hotspots sit over the buttons drawn on the shell and darken when pressed. */
 .dpad,
 .round,
 .pill { position: absolute; }
@@ -146,7 +143,7 @@ button {
 .select { left: 38.01%; }
 .start  { left: 52.42%; }
 
-/* Resize grip: three diagonal ridges, shown while hovering the Game Boy.
+/* Resize grip: three diagonal ridges, shown while hovering the handheld.
    Divided by the page zoom so it stays grabbable when the shell is tiny. */
 .grip {
   position: fixed;
@@ -202,7 +199,7 @@ body:hover .grip,
 
 .skins { display: flex; gap: 4px; flex: 1; }
 
-/* Each swatch is a zoomed-in crop of the skin's shell, so its colour always matches. */
+/* Each swatch is a zoomed-in crop of the shell's face, so its colour always matches. */
 .swatch {
   width: 14px;
   height: 14px;

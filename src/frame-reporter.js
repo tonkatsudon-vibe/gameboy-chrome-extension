@@ -1,6 +1,6 @@
-// Runs in every frame but only acts inside the Game Boy's web-mode iframe:
-// it tells the Game Boy the page's real address, which a cross-origin frame
-// otherwise hides. That keeps the URL bar honest and lets the Game Boy reopen
+// Runs in every frame but only acts inside the handheld's web-mode iframe:
+// it tells the handheld the page's real address, which a cross-origin frame
+// otherwise hides. That keeps the URL bar honest and lets the handheld reopen
 // the same page after you navigate or switch tabs.
 (() => {
   const EXT_ORIGIN = new URL(chrome.runtime.getURL('')).origin;
