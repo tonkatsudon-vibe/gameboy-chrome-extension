@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- Must match the iframe's color-scheme in overlay.js to stay transparent on dark pages. -->
   <meta name="color-scheme" content="light">
-  <title>Game Boy</title>
+  <title>Katsu Pocket</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -12,7 +12,6 @@
     <img class="skin" id="skin" alt="" draggable="false">
 
     <div class="screen">
-      <img class="boot" id="boot" alt="" hidden>
       <canvas id="screen" width="160" height="144" hidden></canvas>
       <div class="web" id="web" hidden>
         <form class="urlbar" id="urlbar">
@@ -20,7 +19,7 @@
           <input id="url" type="text" placeholder="Search or type a URL" spellcheck="false" autocomplete="off">
         </form>
         <div class="web-page">
-          <!-- No allow-top-navigation: framed sites can't navigate the page hosting the Game Boy. -->
+          <!-- No allow-top-navigation: framed sites can't navigate the page hosting the handheld. -->
           <iframe id="page" title="Web page"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
         </div>
@@ -52,6 +51,7 @@
   <!-- Sits in the transparent corner the shell's curve leaves free. -->
   <div class="grip" id="grip" title="Drag to resize"></div>
 
+  <script src="boot.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

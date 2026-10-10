@@ -6,6 +6,6 @@ chrome.runtime.onMessage.addListener((msg) => {
   audio = null;
   if (msg.action === 'play') {
     audio = new Audio(chrome.runtime.getURL(`assets/sounds/${msg.sound}`));
-    audio.play().catch((err) => console.warn('[Game Boy] sound failed:', err));
+    audio.play().catch((err) => console.warn('[Katsu Pocket] sound failed:', err));
   }
 });

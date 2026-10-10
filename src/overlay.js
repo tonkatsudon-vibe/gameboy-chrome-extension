@@ -1,5 +1,5 @@
 // Runs on every page (and is injected on toolbar click into tabs that predate
-// the extension). While the Game Boy is switched on, it floats as a draggable,
+// the extension). While the handheld is switched on, it floats as a draggable,
 // resizable iframe (popup.html) over whichever tab is visible. Navigating or
 // switching tabs rebuilds it here from saved state, skipping the boot.
 (() => {
@@ -8,7 +8,7 @@
   window.__gameboyOverlay = true;
 
   const ID = 'gameboy-extension-overlay';
-  // Skin aspect ratio (1076×1845). popup.html zooms its 300px layout to fit.
+  // Shell aspect ratio (1076×1845). popup.html zooms its 300px layout to fit.
   const ASPECT = 1845 / 1076;
   const MIN_WIDTH = 100;
   const MAX_WIDTH = 900;
@@ -100,7 +100,7 @@
     chrome.runtime.sendMessage({ type: 'gameboy:framing', on: false }).catch(() => {});
   }
 
-  // Only the visible tab gets a live Game Boy, so there's one running at a
+  // Only the visible tab gets a live handheld, so there's one running at a
   // time: no duplicate sounds or pages playing in background tabs.
   async function sync() {
     const { overlayOpen } = await chrome.storage.local.get({ overlayOpen: false });
@@ -123,7 +123,7 @@
   document.addEventListener('visibilitychange', sync);
   window.addEventListener('message', onMessage);
   window.addEventListener('resize', onResize);
-  // Some pages rebuild <html>'s children (e.g. document.open); put the Game Boy back.
+  // Some pages rebuild <html>'s children (e.g. document.open); put the handheld back.
   new MutationObserver(() => {
     if (frame && !frame.isConnected) {
       frame = null;

@@ -1,8 +1,8 @@
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[Game Boy] installed');
+  console.log('[Katsu Pocket] installed');
 });
 
-// Clicking the toolbar icon switches the Game Boy on or off in every tab.
+// Clicking the toolbar icon switches the handheld on or off in every tab.
 // overlay.js runs on each page and reacts to the stored flag.
 chrome.action.onClicked.addListener(async (tab) => {
   try {
@@ -14,13 +14,13 @@ chrome.action.onClicked.addListener(async (tab) => {
     });
   } catch (err) {
     // chrome://, the Web Store and other protected pages can't be scripted.
-    console.warn('[Game Boy] cannot open on this page:', err.message);
+    console.warn('[Katsu Pocket] cannot open on this page:', err.message);
   }
   const { overlayOpen } = await chrome.storage.local.get({ overlayOpen: false });
   await chrome.storage.local.set({ overlayOpen: !overlayOpen });
 });
 
-// Web mode embeds sites in the Game Boy screen, but most sites send
+// Web mode embeds sites in the handheld's screen, but most sites send
 // X-Frame-Options / CSP frame-ancestors to refuse being framed. This session
 // rule strips those headers for sub-frames, limited to the tabs that currently
 // have web mode open. DNR can't target "frames inside our frame" directly, so
@@ -56,7 +56,7 @@ function setFraming(tabId, on) {
       removeRuleIds: [FRAMING_RULE_ID],
       addRules: tabIds.size ? [framingRule([...tabIds])] : [],
     });
-  }).catch((err) => console.warn('[Game Boy] framing rule update failed:', err));
+  }).catch((err) => console.warn('[Katsu Pocket] framing rule update failed:', err));
   return framingQueue;
 }
 
@@ -70,9 +70,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => setFraming(tabId, false));
 
-// Boot sounds play from an offscreen document: the Game Boy frame sits inside
+// Boot sounds play from an offscreen document: the handheld's frame sits inside
 // a web page, where Chrome often blocks sound until the page has been clicked.
-const SOUNDS = new Set(['gameboy.mp3', 'gameboy-color.mp3']);
+const SOUNDS = new Set(['chime-classic.wav', 'chime-color.wav']);
 let offscreenReady = null;
 
 async function ensureOffscreen() {
@@ -82,7 +82,7 @@ async function ensureOffscreen() {
   offscreenReady ??= chrome.offscreen.createDocument({
     url: 'src/offscreen.html',
     reasons: ['AUDIO_PLAYBACK'],
-    justification: 'Play the Game Boy boot sound.',
+    justification: 'Play the boot chime.',
   }).finally(() => { offscreenReady = null; });
   await offscreenReady;
 }
@@ -97,7 +97,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg.action === 'prepare') return;
       return sendToOffscreen(msg.action, msg.sound);
     })
-    .catch((err) => console.warn('[Game Boy] sound failed:', err))
+    .catch((err) => console.warn('[Katsu Pocket] sound failed:', err))
     .finally(() => sendResponse());
   return true;
 });
@@ -106,7 +106,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 const sendToOffscreen = (action, sound) =>
   chrome.runtime.sendMessage({ target: 'offscreen', action, sound }).catch(() => {});
 
-// Switching the Game Boy off (toolbar or ×) cuts a boot sound that's still playing.
+// Switching the handheld off (toolbar or ×) cuts a boot sound that's still playing.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.overlayOpen?.newValue === false) sendToOffscreen('stop');
 });
