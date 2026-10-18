@@ -1,14 +1,20 @@
 {
   "manifest_version": 3,
-  "name": "Game Boy",
+  "name": "GameBoy Plugin by Tonkatsudon",
+  "short_name": "GameBoy Plugin",
   "version": "0.1.0",
-  "description": "A tiny Game Boy that floats over every page you visit.",
+  "description": "A tiny Game Boy that floats over every page you visit and plays real Game Boy games. Made by Tonkatsudon.",
+  "author": {
+    "email": "tonkatsudon@tonkatsudon.com"
+  },
+  "homepage_url": "https://github.com/tonkatsudon-vibe/gameboy-chrome-extension",
   "permissions": [
     "storage",
     "scripting",
     "activeTab",
     "declarativeNetRequestWithHostAccess",
-    "offscreen"
+    "offscreen",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -38,7 +44,7 @@
     }
   ],
   "action": {
-    "default_title": "Game Boy",
+    "default_title": "GameBoy Plugin by Tonkatsudon",
     "default_icon": {
       "16": "assets/icons/icon16.png",
       "48": "assets/icons/icon48.png",
@@ -48,7 +54,9 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "src/popup.html"
+        "src/popup.html",
+        "src/emulator.html",
+        "src/emulator.js"
       ],
       "matches": [
         "<all_urls>"
@@ -59,5 +67,13 @@
     "16": "assets/icons/icon16.png",
     "48": "assets/icons/icon48.png",
     "128": "assets/icons/icon128.png"
+  },
+  "sandbox": {
+    "pages": [
+      "src/emulator.html"
+    ]
+  },
+  "content_security_policy": {
+    "sandbox": "sandbox allow-scripts; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net; child-src 'self' blob:; object-src 'none'"
   }
 }

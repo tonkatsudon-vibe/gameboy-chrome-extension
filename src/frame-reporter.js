@@ -1,3 +1,6 @@
+// GameBoy Plugin by Tonkatsudon (https://github.com/tonkatsudon-vibe/gameboy-chrome-extension)
+// MIT License, see LICENSE. Keep this notice in copies and forks.
+
 // Runs in every frame but only acts inside the Game Boy's web-mode iframe:
 // it tells the Game Boy the page's real address, which a cross-origin frame
 // otherwise hides. That keeps the URL bar honest and lets the Game Boy reopen

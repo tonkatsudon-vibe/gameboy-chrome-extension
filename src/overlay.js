@@ -1,3 +1,6 @@
+// GameBoy Plugin by Tonkatsudon (https://github.com/tonkatsudon-vibe/gameboy-chrome-extension)
+// MIT License, see LICENSE. Keep this notice in copies and forks.
+
 // Runs on every page (and is injected on toolbar click into tabs that predate
 // the extension). While the Game Boy is switched on, it floats as a draggable,
 // resizable iframe (popup.html) over whichever tab is visible. Navigating or
@@ -13,6 +16,8 @@
   const MIN_WIDTH = 100;
   const MAX_WIDTH = 900;
   const MARGIN = 16;
+  // How small the shell gets while it's being dragged around.
+  const DRAG_SCALE = 0.6;
   const EXT_ORIGIN = new URL(chrome.runtime.getURL('')).origin;
   const heightFor = (w) => Math.ceil(w * ASPECT);
 
@@ -47,8 +52,13 @@
 
   function onMessage(e) {
     if (!frame || e.source !== frame.contentWindow || e.origin !== EXT_ORIGIN) return;
-    const { type, dx, dy } = e.data ?? {};
-    if (type === 'gameboy:drag') {
+    const { type, dx, dy, x, y } = e.data ?? {};
+    if (type === 'gameboy:dragstart') {
+      const fx = Number.isFinite(x) ? x : 0.5;
+      const fy = Number.isFinite(y) ? y : 0.5;
+      frame.style.transformOrigin = `${fx * 100}% ${fy * 100}%`;
+      frame.style.transform = `scale(${DRAG_SCALE})`;
+    } else if (type === 'gameboy:drag') {
       moveTo(frame.offsetLeft + dx, frame.offsetTop + dy);
     } else if (type === 'gameboy:resize') {
       // Project the pointer's movement onto the shell's diagonal so the
@@ -56,6 +66,7 @@
       resizeTo(width + (dx + dy / ASPECT) / 2);
       wanted = width;
     } else if (type === 'gameboy:dragend' || type === 'gameboy:resizeend') {
+      frame.style.transform = '';
       saveLayout();
     } else if (type === 'gameboy:close') {
       chrome.storage.local.set({ overlayOpen: false });
@@ -72,7 +83,8 @@
     frame = document.createElement('iframe');
     frame.id = ID;
     frame.src = chrome.runtime.getURL(`src/popup.html${resume ? '?resume' : ''}`);
-    frame.allow = 'autoplay';
+    // fullscreen: the shell's Full button takes the whole screen from inside the frame.
+    frame.allow = 'autoplay; fullscreen';
     frame.setAttribute('allowtransparency', 'true');
     Object.assign(frame.style, {
       position: 'fixed',
@@ -84,6 +96,7 @@
       colorScheme: 'light',
       zIndex: '2147483647',
       filter: 'drop-shadow(0 8px 24px rgba(0, 0, 0, 0.35))',
+      transition: 'transform 0.15s ease-out',
     });
     document.documentElement.append(frame);
 
