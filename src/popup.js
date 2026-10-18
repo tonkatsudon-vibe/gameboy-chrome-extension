@@ -44,7 +44,7 @@ let localSound = null;
 
 const asset = (path) => `../assets/${path}`;
 
-// chrome.storage is missing when popup.html is opened directly as a file.
+// Outside the extension, web-storage.js supplies chrome.storage.
 const storage = globalThis.chrome?.storage?.local;
 const loadPrefs = () => (storage ? storage.get(prefs) : Promise.resolve(prefs));
 const savePrefs = () => storage?.set(prefs);
